@@ -7,6 +7,12 @@ authors = ["ross <rossmere67@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.8"
 Django = "^4.0.6"
+psycopg2-binary = "^2.9.3"
+strawberry-graphql = "^0.122.0"
+strawberry-graphql-django = "^0.4.0"
+strawberry-django-plus = "^1.21.0"
+django-cors-headers = "^3.13.0"
+django-extensions = "^3.2.0"
 
 [tool.poetry.dev-dependencies]
 

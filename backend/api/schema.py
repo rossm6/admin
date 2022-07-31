@@ -1,0 +1,1 @@
+from dummy.admin import schema
