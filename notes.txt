@@ -1,0 +1,103 @@
+Set up react project with webpack
+
+    In project root -
+
+        mkdir frontend
+        cd frontend
+        npm init
+        mkdir src
+        cd src
+        touch index.html
+        touch index.js
+        npm install react react-dom
+        npm install webpack webpack-cli webpack-dev-server --save-dev
+        npm install @babel/core babel-loader @babel/preset-env @babel/preset-react --save-dev
+        npm install html-webpack-plugin --save-dev
+        npm install css-loader style-loader --save-dev
+        npm install @svgr/webpack --save-dev
+        touch webpack.config.js
+
+
+    Now we have to set up the following files -
+
+        webpack.config.js
+        index.html
+        index.js
+
+
+    Per - https://medium.com/age-of-awareness/setup-react-with-webpack-and-babel-5114a14a47e9
+
+
+Set up linting in vscode
+
+    Run -
+
+        npm info "eslint-config-airbnb@latest" peerDependencies
+
+    This tells you the versions of the packages to install.
+
+    Or just run this shortcut command to install them straight away -
+
+        npx install-peerdeps --dev eslint-config-airbnb
+
+    Per - https://www.npmjs.com/package/eslint-config-airbnb
+
+    Then to get vscode to automatically fix the linting errors (those
+    which can be fixed) we need to have this setting in our .vscode/settings.json:
+
+        {
+            "editor.codeActionsOnSave": {
+                "source.fixAll.eslint": true
+            }
+        }
+
+    Given this fixes the linting errors I can't see the point of using prettier.  Indeed
+    are a couple of SO articles which ask the same question -
+
+        https://stackoverflow.com/questions/61990915/is-prettier-really-needed-when-using-eslint
+
+        https://stackoverflow.com/questions/71324251/is-prettier-redundant-when-using-eslint-airbnb
+
+    Perhaps I'm missing something, but for now I'm going to favour the simpler option and
+    not bother with prettier.
+
+    So here is an example of the problem of not using prettier.
+
+    const o = { a: 1 };
+
+    Could also be written -
+
+    const o = { 
+        a: 1 
+    };
+
+    Both are ok according to airbnb eslint rules.
+
+    I want my react set up to always give the same spacing / line wrapping.
+
+    Perhaps we can achieve this in eslint.  For now though I'll use prettier.
+
+    I have added the prettier vscode extension but NOT installed the prettier npm package.
+    (So this differs to eslint where I have installed the eslint npm package ASWELL as the
+    vscode extension).
+
+    I'll see how it goes (as opposed to installing things which i don't know if are really needed).  
+    It could be there is a conflict between my prettier - currently without any config - and my eslint config.
+
+    If there is a problem two things to consider are -
+
+        1. vscode prettier eslint extension 
+        2. this package: https://github.com/prettier/eslint-config-prettier
+
+    ...
+
+    Ok, so I quickly ran into a problem using airbnb eslint rules, and the
+    prettier vscode extension - eslint complained that only single strings
+    are allowed but prettier was formatting the strings with a double quote. 
+    I solved the problem by installing the vscode extension -
+
+        rvest.vs-code-prettier-eslint
+
+    And then changing the settings so that we have this set -
+
+        "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
