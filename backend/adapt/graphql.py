@@ -1,4 +1,5 @@
 from dataclasses import make_dataclass, field
+import string
 from strawberry.tools import create_type
 import strawberry
 from typing import List
@@ -14,6 +15,19 @@ from typing import Optional
 from strawberry import auto
 from strawberry_django_plus import gql
 from dummy import models as dummy_models
+import stringcase
+
+
+'''
+
+Limitations -
+
+All forms must be able to work when instantiated without any args or kwargs.
+This is because we get all form fields by calling the constructor without passing anything
+(Unlike django models I can't see anything in the django api for getting form fields)
+
+'''
+
 
 FORM_FIELD_TYPE_MAP = {
     forms.fields.BooleanField: bool,
@@ -36,10 +50,13 @@ FORM_FIELD_TYPE_MAP = {
     forms.models.ModelMultipleChoiceField: List[strawberry.ID]
 }
 
+def get_form_fields(form_instance):
+    return form_instance.base_fields.items()
+
 def get_all_fields_from_form(form_class):
     form_instance = form_class()
     fields = []
-    items = form_instance.base_fields.items()
+    items = get_form_fields(form_instance)
     # push optional items to the end of the list.
     # we will assign them "None" value, so they should be placed after
     # attrs with no default values
@@ -101,13 +118,13 @@ class ErrorType:
 class BaseMutationResponseType:
     errors: Optional[List[ErrorType]]
 
-def get_mutation_field_from_model(model, model_gql, form = None):
+def create_default_model_form(model):
+    meta_cls = type("Meta", (), {"model": model, "fields": "__all__"})
+    return type(f'Default{model.__name__}', (forms.ModelForm,), {"Meta": meta_cls})
+
+def get_mutation_field_from_model(model, model_gql, form):
 
     form_input_name = f'default_{model.__name__}_input'
-
-    if not form:
-        meta_cls = type("Meta", (), {"model": model, "fields": "__all__"})
-        form = type(f'Default{model.__name__}', (forms.ModelForm,), {"Meta": meta_cls})
 
     FormInputDataclass = make_dataclass(
         form_input_name,
@@ -117,7 +134,7 @@ def get_mutation_field_from_model(model, model_gql, form = None):
 
     FormInput = strawberry.input(FormInputDataclass)
 
-    form_response_name = f'default_{model.__name__}__response'
+    form_response_name = f'default_{model.__name__}_response'
 
     FormResponseDataclass = make_dataclass(
             form_response_name,
@@ -131,14 +148,17 @@ def get_mutation_field_from_model(model, model_gql, form = None):
 
     FormResponse = strawberry.type(FormResponseDataclass)
 
-    def resolver(info, data: FormInput) -> FormResponse:
+    def resolver(info, input: FormInput) -> FormResponse:
         return FormResponse()
 
-    return strawberry.mutation(name=f'{model.__name__}__default', resolver=resolver)
+    return strawberry.mutation(name=f'{model.__name__.lower()}_default', resolver=resolver)
 
 
-
-
+def create_choices_field_from_forms(forms):
+    # TODO - dynamically create a object type
+    # where we resolve the fields on the object
+    # See - https://strawberry.rocks/docs/types/resolvers#accessing-fields-parents-data
+    return None
 
 
 @strawberry.type
@@ -159,6 +179,11 @@ class Row:
 class Table:
     columns: List["Column"]
     rows: List["Row"]
+
+@strawberry.type
+class Form:
+    mutation_name: str
+    choice_fields: List[str]
 
 
 def is_many_to_one_relation(model):
@@ -212,10 +237,6 @@ def get_columns_from_django_model(model, related_models, path):
 
     return columns
 
-def to_snake_case(name):
-    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
-
-
 def get_model_gql_types(models, model_types):
 
     for model in models:
@@ -238,10 +259,18 @@ def get_model_gql_types(models, model_types):
     return model_types
 
 
+def get_choice_fields_from_form(form):
+    choices = []
+    form_instance = form()
+    for field_name, field in get_form_fields(form_instance):
+        if isinstance(field, (forms.TypedChoiceField, forms.ModelChoiceField, forms.ModelMultipleChoiceField)):
+            choices.append(field_name)
+    return choices
+
 def register(django_models):
 
     django_model_enums = Enum(
-        "django_models", dict([(to_snake_case(django_model.__name__), django_model.__name__) for django_model in django_models])
+        "django_models", dict([(stringcase.snakecase(django_model.__name__), django_model.__name__) for django_model in django_models])
     )
 
     strawberry.enum(django_model_enums)
@@ -285,17 +314,31 @@ def register(django_models):
     model_types = get_model_gql_types(django_models, {})        
 
     default_django_model_form_fields = []
+    forms = []
+    for_choices_query = []
     for model in django_models:
-        default_django_model_form_fields.append(
-            get_mutation_field_from_model(model, model_types[model.__name__])
-        )
-
-    Query = create_type("Query", [models, table])
+        default_model_form = create_default_model_form(model)
+        mutation_field = get_mutation_field_from_model(model, model_types[model.__name__], default_model_form)
+        forms.append((mutation_field.graphql_name, default_model_form))
+        default_django_model_form_fields.append(mutation_field)
 
     Mutation = create_type(
         "Mutation", 
         default_django_model_form_fields
     )
+
+    choices_field = create_choices_field_from_forms(forms)
+
+    def get_forms() -> List[Form]:
+        return [
+            Form(mutation_name=mutation_name, choice_fields=get_choice_fields_from_form(form))
+            for mutation_name, form in forms
+        ]
+
+    forms_field = strawberry.field(name="forms", resolver=get_forms)
+
+    # TODO - add choices field
+    Query = create_type("Query", [forms_field, models, table])
 
     return {
         "query": Query,

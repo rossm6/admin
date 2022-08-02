@@ -309,6 +309,7 @@ function BaseInput({
       type={type}
       value={value}
       checked={checked}
+      style={{ width: '100%' }}
     />
   );
 }
@@ -581,7 +582,7 @@ function BaseSelect({
   const OptionsComponentToUse = OptionsComponent || state.components.option;
 
   return (
-    <SelectComponentToUse value={value?.value} name={name} onChange={onChange} id={id}>
+    <SelectComponentToUse value={value?.value} name={name} onChange={onChange} id={id} style={{ width: '100%' }}>
       {options.map((option) => (
         <OptionsComponentToUse key={option.value} value={option.value}>
           {option.label}
