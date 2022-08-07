@@ -1,5 +1,5 @@
 import {
-  Box, Card, Flex, Button, Heading,
+  Box, Card, Flex, Button,
 } from 'theme-ui';
 import { Rnd } from 'react-rnd';
 import { useContext, useEffect, useState } from 'react';
@@ -10,9 +10,35 @@ import Check from '../icons/check.svg';
 import { AdaptContext } from './contexts';
 import propTypes from '../propTypes';
 import CSS from '../css';
+import Elements from './elements';
 
-const MIN_WIDTH = 100;
+const MIN_WIDTH = 500;
 const MIN_HEIGHT = 100;
+
+const SEPARATE_WINDOW = {
+  width: '50%',
+  minWidth: MIN_WIDTH,
+  minHeight: MIN_HEIGHT,
+  height: '50%',
+  x: 0,
+  y: 0,
+};
+
+const LEFT_PANE = {
+  width: 300,
+  height: '100%',
+  key: 1,
+  minWidth: MIN_WIDTH,
+  minHeight: MIN_HEIGHT,
+};
+
+const RIGHT_PANE = {
+  height: '100%',
+  key: 1,
+  minHeight: MIN_HEIGHT,
+  width: 300,
+  minWidth: MIN_WIDTH,
+};
 
 const dropdownItemSx = {
   px: 4,
@@ -98,14 +124,7 @@ function PositionMenu({
             Dock to right
           </Box>
           <Box
-            onClick={() => dropdownItemOnClickHandler('separate', {
-              width: '50%',
-              minWidth: MIN_WIDTH,
-              minHeight: MIN_HEIGHT,
-              height: '50%',
-              x: 0,
-              y: 0,
-            })}
+            onClick={() => dropdownItemOnClickHandler('separate', { ...SEPARATE_WINDOW })}
             sx={dropdownItemSx}
           >
             <Check style={{ visibility: devtoolsPosition === 'separate' ? 'visible' : 'hidden' }} />
@@ -216,7 +235,7 @@ Tabs.propTypes = {
   setTab: PropTypes.func.isRequired,
 };
 
-const tabs = ['Inspector', 'Todo'];
+const tabs = ['Inspector', 'Routes', 'Elements', 'Components'];
 
 function Inspector() {
   return (
@@ -227,16 +246,20 @@ function Inspector() {
   );
 }
 
+function initDevToolsState(devtoolsPosition) {
+  if (devtoolsPosition === 'left') {
+    return LEFT_PANE;
+  }
+  if (devtoolsPosition === 'right') {
+    return RIGHT_PANE;
+  }
+  return SEPARATE_WINDOW;
+}
+
 function Devtools() {
   const { devtoolsPosition, setDevtoolsPosition } = useContext(AdaptContext);
   const [showDevtoolsPositionDropdown, setShowDevtoolsPositionDropdown] = useState(false);
-  const [devtoolsState, setDevtoolsState] = useState({
-    width: 300,
-    height: '100%',
-    key: 1,
-    minWidth: MIN_WIDTH,
-    minHeight: MIN_HEIGHT,
-  });
+  const [devtoolsState, setDevtoolsState] = useState(initDevToolsState(devtoolsPosition));
   const [tab, setTab] = useState(tabs[0]);
 
   const devtoolsSx = getDevtoolsSxProp(devtoolsPosition);
@@ -288,7 +311,10 @@ function Devtools() {
             showDevtoolsPositionDropdown={showDevtoolsPositionDropdown}
           />
         </Flex>
-        <Box sx={{ flex: 1, py: 2 }}>{tab === 'Inspector' && <Inspector />}</Box>
+        <Box sx={{ flex: 1, py: 2 }}>
+          {tab === 'Inspector' && <Inspector />}
+          {tab === 'Elements' && <Elements />}
+        </Box>
       </Flex>
     </Rnd>
   );

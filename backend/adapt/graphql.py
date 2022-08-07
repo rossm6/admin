@@ -1,4 +1,5 @@
 from dataclasses import make_dataclass, field
+import json
 import string
 from strawberry.tools import create_type
 import strawberry
@@ -14,6 +15,7 @@ import datetime
 from typing import Optional
 from strawberry import auto
 from strawberry_django_plus import gql
+from adapt.models import Adapt
 from dummy import models as dummy_models
 import stringcase
 
@@ -168,7 +170,6 @@ class Column:
     field: str
     related_models: List[str]
 
-
 @strawberry.type
 class Row:
     cursor: str
@@ -184,6 +185,24 @@ class Table:
 class Form:
     mutation_name: str
     choice_fields: List[str]
+
+
+@strawberry.type
+class SaveStateResponse:
+    success: bool
+    # TODO (probably)- add errors
+
+DEFAULT_STATE = { 'devtoolsPosition': 'right', 'elements': [], 'elementInView': None }
+
+def get_state() -> str:
+    adapt = Adapt.objects.last()
+    if adapt:
+        return adapt.state
+    return json.dumps(DEFAULT_STATE)
+
+def save_state(state: str) -> SaveStateResponse:
+    Adapt.objects.create(state=state)
+    return SaveStateResponse(success=True)
 
 
 def is_many_to_one_relation(model):
@@ -222,13 +241,13 @@ def get_columns_from_django_model(model, related_models, path):
                 and related_model not in related_models
             ):
                 columns = columns + get_columns_from_django_model(
-                    related_model, 
+                    related_model,
                     related_models=related_models + [related_model],
                     path=path + [get_related_field_name(field)]
                 )
         else:
             column = {
-                "name": field.name, 
+                "name": field.name,
                 "model": model.__name__,
                 "field": "__".join(path + [field.name]),
                 "related_models": [ related_model.__name__ for related_model in related_models]
@@ -244,7 +263,7 @@ def get_model_gql_types(models, model_types):
         model_type = gql.django.type(model)
         model_gql_type = model_type(make_dataclass(model_type_name, [("id", str)]))
         model_types[model.__name__] = model_gql_type
-        
+
         for field in model._meta.get_fields():
             if field.related_model and isinstance(field, Field):
                 related_model = field.related_model
@@ -255,7 +274,7 @@ def get_model_gql_types(models, model_types):
                 setattr(model_gql_type, field.name, model_types[related_model.__name__])
             else:
                 setattr(model_gql_type, field.name, auto)
-        
+
     return model_types
 
 
@@ -292,26 +311,26 @@ def register(django_models):
         for django_model in django_models:
             if django_model.__name__ == model:
                 break
-        
+
         columns = get_columns_from_django_model(django_model, [], [])
 
         objs = django_model.objects.all().values_list(*[column["field"] for column in columns])
 
         return Table(
-            columns=[Column(**column) for column in columns], 
-            rows=[ 
-                Row(**{ 
-                    "cursor": "todo", 
+            columns=[Column(**column) for column in columns],
+            rows=[
+                Row(**{
+                    "cursor": "todo",
                     "cellValues": [str(value) for value in obj ]
-                }) 
-                for obj in objs 
+                })
+                for obj in objs
             ]
         )
 
     models = strawberry.field(name="models", resolver=get_models)
     table = strawberry.field(name="table", resolver=get_table)
 
-    model_types = get_model_gql_types(django_models, {})        
+    model_types = get_model_gql_types(django_models, {})
 
     default_django_model_form_fields = []
     forms = []
@@ -322,9 +341,14 @@ def register(django_models):
         forms.append((mutation_field.graphql_name, default_model_form))
         default_django_model_form_fields.append(mutation_field)
 
+    save_state_mutation = strawberry.mutation(name='saveState', resolver=save_state)
+
     Mutation = create_type(
-        "Mutation", 
-        default_django_model_form_fields
+        "Mutation",
+        [
+            *default_django_model_form_fields,
+            save_state_mutation
+        ]
     )
 
     choices_field = create_choices_field_from_forms(forms)
@@ -336,9 +360,10 @@ def register(django_models):
         ]
 
     forms_field = strawberry.field(name="forms", resolver=get_forms)
+    state = strawberry.field(name="state", resolver=get_state)
 
     # TODO - add choices field
-    Query = create_type("Query", [forms_field, models, table])
+    Query = create_type("Query", [forms_field, models, state, table])
 
     return {
         "query": Query,

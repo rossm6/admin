@@ -24,7 +24,7 @@ const theme = {
       fontSize: 'inherit',
       bg: 'white',
       '&:focus': {
-        boxShadow: '0 0 0 .25rem rgba(13,110,253,.25goo)',
+        boxShadow: '0 0 0 .25rem rgba(13,110,253,.25)',
         borderColor: '#86b7fe',
         transition: 'border-color .15s ease-in-out,box-shadow .15s ease-in-out',
         outline: 0,

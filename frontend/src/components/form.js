@@ -1,5 +1,11 @@
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useReducer,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
 } from 'react';
 import PropTypes from 'prop-types';
 import * as yup from 'yup';
@@ -87,10 +93,22 @@ function getDefaultFieldValidation(fieldConfig) {
   return validation;
 }
 
+function getFieldConfig(fieldConfig) {
+  const config = { ...fieldConfig };
+  if (fieldConfig.type === 'checkbox' && !fieldConfig.choices) {
+    config.choices = [
+      {
+        value: 'true',
+      },
+    ];
+    config.initialValue = fieldConfig.initialValue ? { value: 'true' } : '';
+  }
+  return config;
+}
+
 function init({
   fields: userDefinedFields,
   nonFieldValidation,
-  onSubmit,
   usersValidationSchema,
   components,
   prefix,
@@ -98,7 +116,7 @@ function init({
   const fields = {};
   Object.entries(userDefinedFields).forEach(([fieldName, fieldConfig]) => {
     const prefixedFieldName = prefix ? `${prefix}-${fieldName}` : fieldName;
-    fields[prefixedFieldName] = fieldConfig;
+    fields[prefixedFieldName] = getFieldConfig(fieldConfig);
   });
 
   const initial = {
@@ -108,7 +126,6 @@ function init({
     errors: {},
     fields,
     components: mergeDefaultProps(DEFAULT_COMPONENTS, components || {}),
-    usersOnSubmit: onSubmit,
     prefix,
   };
 
@@ -140,12 +157,11 @@ function init({
 }
 
 function reset({
-  fields, nonFieldValidation, onSubmit, usersValidationSchema, components,
+  fields, nonFieldValidation, usersValidationSchema, components,
 }) {
   return init({
     fields,
     nonFieldValidation,
-    onSubmit,
     usersValidationSchema,
     components,
   });
@@ -154,10 +170,12 @@ function reset({
 function formReducer(state, action) {
   switch (action.type) {
     case 'reset':
-      return reset(
-        action.payload.fields || state.initialValues,
-        action.payload.components || state.components,
-      );
+      return reset({
+        ...state,
+        fields: action.payload.fields || state.initialValues,
+        components: action.payload.components || state.components,
+        onSubmit: action.payload.onSubmit || state.onSubmit,
+      });
     case 'setFieldValue':
       return {
         ...state,
@@ -203,14 +221,32 @@ BaseLabel.defaultProps = {
   htmlFor: '',
 };
 
-export function Label({
-  Component, name: unprefixedName, label: defaultLabel, htmlFor,
-}) {
+function useLabel(unprefixedName) {
   const { state } = useContext(FormContext);
   const name = getPrefixedName(state.prefix, unprefixedName);
-  const label = defaultLabel || state.fields[name].label || name;
-  const ComponentToUse = Component || state.components.label;
-  return <BaseLabel Component={ComponentToUse} htmlFor={htmlFor || name} label={label} />;
+  const label = state.fields[name].label || name;
+
+  return {
+    component: state.components.label,
+    label,
+    name,
+    htmlFor: name,
+  };
+}
+
+export function Label({
+  Component, name: unprefixedName, label, htmlFor,
+}) {
+  const { component, label: defaultLabel, htmlFor: defaultHtmlFor } = useLabel(unprefixedName);
+  const ComponentToUse = Component || component;
+
+  return (
+    <BaseLabel
+      Component={ComponentToUse}
+      htmlFor={htmlFor || defaultHtmlFor}
+      label={label || defaultLabel}
+    />
+  );
 }
 
 Label.propTypes = {
@@ -247,24 +283,8 @@ BaseTextarea.defaultProps = {
 };
 
 function Textarea({
-  children, name, FieldComponent, value,
+  children, name, FieldComponent, value, onChange,
 }) {
-  const { dispatch } = useContext(FormContext);
-
-  const onChange = useCallback(
-    (e) => {
-      const val = e.target.value;
-      dispatch({
-        type: 'setFieldValue',
-        payload: {
-          name,
-          value: val,
-        },
-      });
-    },
-    [dispatch, name],
-  );
-
   const inputFieldContextValue = useMemo(
     () => ({
       name,
@@ -288,6 +308,7 @@ Textarea.propTypes = {
   name: PropTypes.string.isRequired,
   FieldComponent: PropTypes.elementType,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  onChange: PropTypes.func.isRequired,
 };
 
 Textarea.defaultProps = {
@@ -334,24 +355,10 @@ BaseInput.defaultProps = {
 export const InputFieldContext = createContext();
 
 function Input({
-  children, name, FieldComponent, value, id,
+  children, name, FieldComponent, value, id, onChange,
 }) {
-  const { state, dispatch } = useContext(FormContext);
+  const { state } = useContext(FormContext);
   const { type } = state.fields[name];
-
-  const onChange = useCallback(
-    (e) => {
-      const val = e.target.value;
-      dispatch({
-        type: 'setFieldValue',
-        payload: {
-          name,
-          value: val,
-        },
-      });
-    },
-    [dispatch, name],
-  );
 
   const inputFieldContext = useMemo(
     () => ({
@@ -386,6 +393,7 @@ Input.propTypes = {
   FieldComponent: PropTypes.elementType,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   id: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
 };
 
 Input.defaultProps = {
@@ -406,7 +414,7 @@ function BaseCheckbox({
 }) {
   return (
     <FormCheckComponent>
-      <LabelComponent label={label} name={name} />
+      {label && <LabelComponent label={label} name={name} />}
       <BaseInput
         label={label}
         name={name}
@@ -456,53 +464,11 @@ function Checkbox({
   name,
   value,
   id,
+  onChange,
+  isChecked,
 }) {
-  const { state, dispatch } = useContext(FormContext);
+  const { state } = useContext(FormContext);
   const { choices } = state.fields[name];
-
-  const onChange = useCallback(
-    (e) => {
-      const { checked } = e.target;
-      const checkBoxValue = e.target.value;
-      let newValue;
-      if (multi) {
-        newValue = [...value];
-        if (newValue.map((valObj) => valObj.value).includes(checkBoxValue)) {
-          newValue = newValue.filter((valObj) => valObj.value !== checkBoxValue);
-        } else {
-          newValue.push(choices.find((choice) => choice.value === checkBoxValue));
-        }
-      } else {
-        newValue = '';
-        if (checked) {
-          newValue = choices.find((choice) => choice.value === checkBoxValue);
-        }
-      }
-      dispatch({
-        type: 'setFieldValue',
-        payload: {
-          name,
-          value: newValue,
-        },
-      });
-    },
-    [choices, dispatch, multi, name, value],
-  );
-
-  const isChecked = useCallback(
-    (choice) => {
-      let choiceIsChecked;
-
-      if (multi) {
-        choiceIsChecked = value.map((valueObj) => valueObj.value).includes(choice.value);
-      } else {
-        choiceIsChecked = !!(value?.value && value?.value === choice.value);
-      }
-
-      return choiceIsChecked;
-    },
-    [multi, value],
-  );
 
   const inputFieldContext = useMemo(
     () => ({
@@ -561,6 +527,8 @@ Checkbox.propTypes = {
   ]),
   multi: PropTypes.bool,
   id: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
+  isChecked: PropTypes.func.isRequired,
 };
 
 Checkbox.defaultProps = {
@@ -582,7 +550,13 @@ function BaseSelect({
   const OptionsComponentToUse = OptionsComponent || state.components.option;
 
   return (
-    <SelectComponentToUse value={value?.value} name={name} onChange={onChange} id={id} style={{ width: '100%' }}>
+    <SelectComponentToUse
+      value={value?.value}
+      name={name}
+      onChange={onChange}
+      id={id}
+      style={{ width: '100%' }}
+    >
       {options.map((option) => (
         <OptionsComponentToUse key={option.value} value={option.value}>
           {option.label}
@@ -617,26 +591,17 @@ BaseSelect.defaultProps = {
 };
 
 function Select({
-  children, GroupFieldComponent, FieldComponent, name, multi, value, id,
+  children,
+  GroupFieldComponent,
+  FieldComponent,
+  name,
+  multi,
+  value,
+  id,
+  onChange,
 }) {
-  const { state, dispatch } = useContext(FormContext);
+  const { state } = useContext(FormContext);
   const { choices } = state.fields[name];
-
-  const onChange = useCallback(
-    (e) => {
-      const val = e.target.value;
-      const chosen = choices.find((choice) => choice.value === val);
-
-      dispatch({
-        type: 'setFieldValue',
-        payload: {
-          name,
-          value: chosen,
-        },
-      });
-    },
-    [dispatch, name, choices],
-  );
 
   const inputFieldContext = useMemo(
     () => ({
@@ -679,6 +644,7 @@ Select.propTypes = {
   FieldComponent: PropTypes.elementType,
   children: PropTypes.node,
   id: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
 };
 
 Select.defaultProps = {
@@ -755,30 +721,11 @@ function Radio({
   value,
   type,
   id,
+  onChange,
+  isChecked,
 }) {
-  const { state, dispatch } = useContext(FormContext);
+  const { state } = useContext(FormContext);
   const { choices } = state.fields[name];
-
-  const onChange = useCallback(
-    (e) => {
-      const val = e.target.value;
-      const chosen = choices.find((choice) => choice.value === val);
-
-      dispatch({
-        type: 'setFieldValue',
-        payload: {
-          name,
-          value: chosen,
-        },
-      });
-    },
-    [choices, dispatch, name],
-  );
-
-  const isChecked = useCallback(
-    (choice) => !!(value?.value && value?.value === choice.value),
-    [value],
-  );
 
   /**
    * I could not think of a word for the element which has the radio input
@@ -839,6 +786,8 @@ Radio.propTypes = {
   type: PropTypes.string,
   children: PropTypes.node,
   id: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
+  isChecked: PropTypes.func.isRequired,
 };
 
 Radio.defaultProps = {
@@ -881,12 +830,120 @@ function fieldRelated(state, name) {
     multi, type, label, id,
   } = state.fields[name];
 
+  // TODO - obj returned should be { Component, props: { value, id, ... } }
+
   return {
     value: state.useInitialValues.has(name) ? initialValue : state.values[name],
     Component: getComponent(type),
     multi,
     label: label || capitalize(name),
     id: id || name,
+    type,
+  };
+}
+
+function useOnChange(name) {
+  const { dispatch, state } = useContext(FormContext);
+  const { choices, multi, type } = state.fields[name];
+
+  const onChange = useCallback(
+    // eslint-disable-next-line consistent-return
+    (e) => {
+      const { value } = e.target;
+
+      if (type === 'text' || type === 'number' || type === 'textarea') {
+        return dispatch({
+          type: 'setFieldValue',
+          payload: {
+            name,
+            value,
+          },
+        });
+      }
+
+      if (type === 'checkbox') {
+        const { checked } = e.target;
+        let newValue;
+        if (multi) {
+          newValue = [...value];
+          if (newValue.map((valObj) => valObj.value).includes(value)) {
+            newValue = newValue.filter((valObj) => valObj.value !== value);
+          } else {
+            newValue.push(choices.find((choice) => choice.value === value));
+          }
+        } else {
+          newValue = '';
+          if (checked) {
+            newValue = choices.find((choice) => choice.value === value);
+          }
+        }
+        return dispatch({
+          type: 'setFieldValue',
+          payload: {
+            name,
+            value: newValue,
+          },
+        });
+      }
+
+      if (type === 'select' || type === 'radio') {
+        const chosen = choices.find((choice) => choice.value === value);
+        return dispatch({
+          type: 'setFieldValue',
+          payload: {
+            name,
+            value: chosen,
+          },
+        });
+      }
+    },
+    [dispatch, name, choices, type, multi],
+  );
+
+  return onChange;
+}
+
+function useIsChecked(name) {
+  const { state } = useContext(FormContext);
+  const { multi } = state.fields[name];
+  const value = state.values[name];
+
+  const isChecked = useCallback(
+    (choice) => {
+      if (multi) {
+        return value.map((valueObj) => valueObj.value).includes(choice.value);
+      }
+      return !!(value?.value && value?.value === choice.value);
+    },
+    [multi, value],
+  );
+
+  return isChecked;
+}
+
+function useInputField(unprefixedName) {
+  const { state } = useContext(FormContext);
+  const name = getPrefixedName(state.prefix, unprefixedName);
+
+  const {
+    Component: DefaultComponent, value, multi, label, id, type,
+  } = fieldRelated(state, name);
+
+  const onChange = useOnChange(name);
+  const isChecked = useIsChecked(name);
+
+  return {
+    Component: DefaultComponent,
+    props: {
+      value,
+      multi,
+      label,
+      id,
+      name,
+      onChange,
+      isChecked,
+      type,
+    },
   };
 }
 
@@ -897,11 +954,12 @@ export function InputField({
   FormCheckComponent,
   name: unprefixedName,
 }) {
-  const { state } = useContext(FormContext);
-  const name = getPrefixedName(state.prefix, unprefixedName);
   const {
-    Component: DefaultComponent, value, multi, label, id,
-  } = fieldRelated(state, name);
+    Component: DefaultComponent,
+    props: {
+      value, multi, label, id, name, onChange, isChecked,
+    },
+  } = useInputField(unprefixedName);
 
   return (
     <DefaultComponent
@@ -913,6 +971,8 @@ export function InputField({
       FormCheckComponent={FormCheckComponent}
       value={value}
       id={id}
+      onChange={onChange}
+      isChecked={isChecked}
     >
       {children}
     </DefaultComponent>
@@ -960,20 +1020,23 @@ BaseFieldErrors.defaultProps = {
 
 const FieldErrorsContext = createContext();
 
-export function FieldErrors({ children, Component, name }) {
+function useErrors(unprefixedName) {
   const { state } = useContext(FormContext);
-
+  const name = getPrefixedName(state.prefix, unprefixedName);
   const fieldErrors = state.errors[name];
+  let errors = [];
+  if (Array.isArray(fieldErrors)) {
+    errors = fieldErrors;
+  } else if (fieldErrors) {
+    errors = [fieldErrors];
+  }
+  return errors;
+}
 
-  const fieldErrorsContext = useMemo(() => {
-    let errors = [];
-    if (Array.isArray(fieldErrors)) {
-      errors = fieldErrors;
-    } else if (fieldErrors) {
-      errors = [fieldErrors];
-    }
-    return { errors };
-  }, [fieldErrors]);
+export function FieldErrors({ children, Component, name: unprefixedName }) {
+  const errors = useErrors(unprefixedName);
+
+  const fieldErrorsContext = useMemo(() => ({ errors }), [errors]);
 
   return (
     <FieldErrorsContext.Provider value={fieldErrorsContext}>
@@ -1051,27 +1114,48 @@ BaseFormControl.defaultProps = {
   FieldLabelComponent: undefined,
 };
 
+export const FieldContext = createContext();
+
 export function Field({
-  name,
+  children,
+  name: unprefixedName,
   FormControl: FormControlComponent,
   Label: LabelComponent,
   Field: FieldComponent,
   Group: GroupFieldComponent,
   FieldError: FieldErrorComponent,
 }) {
+  const labelProps = useLabel(unprefixedName);
+  const inputProps = useInputField(unprefixedName);
+  const errorProps = useErrors(unprefixedName);
+
+  const fieldContext = useMemo(
+    () => ({
+      label: labelProps,
+      inputField: inputProps,
+      errors: errorProps,
+    }),
+    [labelProps, inputProps, errorProps],
+  );
+
   return (
-    <BaseFormControl
-      FormControlComponent={FormControlComponent}
-      LabelComponent={LabelComponent}
-      FieldComponent={FieldComponent}
-      GroupFieldComponent={GroupFieldComponent}
-      FieldErrorComponent={FieldErrorComponent}
-      name={name}
-    />
+    <FieldContext.Provider value={fieldContext}>
+      {children || (
+        <BaseFormControl
+          FormControlComponent={FormControlComponent}
+          LabelComponent={LabelComponent}
+          FieldComponent={FieldComponent}
+          GroupFieldComponent={GroupFieldComponent}
+          FieldErrorComponent={FieldErrorComponent}
+          name={unprefixedName}
+        />
+      )}
+    </FieldContext.Provider>
   );
 }
 
 Field.propTypes = {
+  children: PropTypes.node,
   FormControl: PropTypes.elementType,
   Label: PropTypes.elementType,
   Field: PropTypes.elementType,
@@ -1081,6 +1165,7 @@ Field.propTypes = {
 };
 
 Field.defaultProps = {
+  children: undefined,
   FormControl: undefined,
   Label: undefined,
   Field: undefined,
@@ -1184,12 +1269,29 @@ export function useForm({
     init({
       fields,
       nonFieldValidation,
-      onSubmit: _onSubmit,
       usersValidationSchema,
       components,
       prefix,
     }),
   );
+
+  const userDefiniedOnSubmit = useRef();
+  userDefiniedOnSubmit.current = _onSubmit;
+
+  const previousFields = usePrevious(fields);
+
+  useEffect(() => {
+    if (previousFields && !isEqual(previousFields, fields)) {
+      dispatch({
+        type: 'reset',
+        payload: {
+          fields,
+          components,
+        },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, fields]);
 
   const previousServerSideErrors = usePrevious(serverSideErrors);
 
@@ -1237,6 +1339,19 @@ export function useForm({
     [state.validationSchema],
   );
 
+  const resetForm = useCallback(
+    ({ fields: newFields, components: newComponents }) => {
+      dispatch({
+        type: 'reset',
+        payload: {
+          fields: newFields,
+          components: newComponents,
+        },
+      });
+    },
+    [dispatch],
+  );
+
   const onSubmit = useCallback(
     (e) => {
       e.preventDefault();
@@ -1253,8 +1368,12 @@ export function useForm({
             type: 'setErrors',
             payload: completeErrors, // could be empty
           });
-          if (isEqual(completeErrors, emptyErrors) && state.usersOnSubmit) {
-            state.usersOnSubmit(prepareValuesForSubmission(state));
+          if (isEqual(completeErrors, emptyErrors) && userDefiniedOnSubmit.current) {
+            userDefiniedOnSubmit.current({
+              ...prepareValuesForSubmission(state),
+              reset: resetForm,
+              prefix: state.prefix,
+            });
           }
         })
         .catch((error) => {
@@ -1262,7 +1381,7 @@ export function useForm({
           console.log('Warning: An unhandled error was caught from submitForm()', error);
         });
     },
-    [submitForm, state],
+    [submitForm, state, resetForm],
   );
 
   const isValid = useCallback((name) => name in state.errors, [state.errors]);
@@ -1273,8 +1392,9 @@ export function useForm({
       dispatch,
       onSubmit,
       isValid,
+      resetForm,
     }),
-    [state, dispatch, onSubmit, isValid],
+    [state, dispatch, onSubmit, isValid, resetForm],
   );
 
   return formApi;

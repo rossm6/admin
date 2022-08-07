@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react';
+import {
+  useEffect, useMemo, useReducer, useState,
+} from 'react';
 import { Box } from 'theme-ui';
+import { gql, useMutation, useQuery } from '@apollo/client';
+import PropTypes from 'prop-types';
+import isEqual from 'lodash.isequal';
 import Devtools from './devtools';
 import Ui from './ui';
 import { AdaptContext } from './contexts';
+import usePrevious from '../hooks/usePrevious';
 
 function useMainContainerStyles(devtoolsPosition) {
   const containerSx = { display: 'flex', height: '100vh' };
@@ -37,16 +43,65 @@ function useMainContainerStyles(devtoolsPosition) {
   return [containerSx, containerCss, uiSx];
 }
 
-function Adapt() {
-  const [devtoolsPosition, setDevtoolsPosition] = useState('right');
-  const [sx, css, uiSx] = useMainContainerStyles(devtoolsPosition);
+function adaptReducer(state, action) {
+  switch (action.type) {
+    case 'setDevtoolsPosition':
+      return {
+        ...state,
+        devtoolsPosition: action.payload.devtoolsPosition,
+      };
+    case 'setElements':
+      return {
+        ...state,
+        elements: action.payload.elements,
+      };
+    case 'elementInView':
+      return {
+        ...state,
+        elementInView: action.payload.elementInView,
+      };
+    default:
+      throw new Error();
+  }
+}
+
+const SAVE_STATE = gql`
+  mutation SAVE($state: String!) {
+    saveState(state: $state) {
+      success
+    }
+  }
+`;
+
+function Adapt({ initialState }) {
+  const [state, dispatch] = useReducer(adaptReducer, initialState);
+  const [sx, css, uiSx] = useMainContainerStyles(state.devtoolsPosition);
+  const [saveState] = useMutation(SAVE_STATE);
+
+  const previousState = usePrevious(state);
+
+  useEffect(() => {
+    if (previousState) {
+      // i.e. do not save the initialState when Adapt first mounts!
+      saveState({
+        variables: {
+          state: JSON.stringify(state),
+        },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveState, state]);
 
   const adaptContext = useMemo(
     () => ({
-      devtoolsPosition,
-      setDevtoolsPosition,
+      devtoolsPosition: state.devtoolsPosition,
+      dispatch,
+      elements: state.elements,
+      elementInView: state.elementInView,
+      setDevtoolsPosition: (devtoolsPosition) => dispatch({ type: 'setDevtoolsPosition', payload: { devtoolsPosition } }),
+      setElements: (elements) => dispatch({ type: 'setElements', payload: { elements } }),
     }),
-    [devtoolsPosition, setDevtoolsPosition],
+    [dispatch, state.devtoolsPosition, state.elements, state.elementInView],
   );
 
   return (
@@ -58,5 +113,23 @@ function Adapt() {
     </AdaptContext.Provider>
   );
 }
+
+Adapt.propTypes = {
+  initialState: PropTypes.shape({
+    devtoolsPosition: PropTypes.string.isRequired,
+    elements: PropTypes.arrayOf(
+      PropTypes.shape({
+        name: PropTypes.string,
+        components: PropTypes.arrayOf(
+          PropTypes.shape({
+            Component: PropTypes.elementType,
+            // eslint-disable-next-line react/forbid-prop-types
+            props: PropTypes.object,
+          }),
+        ),
+      }),
+    ),
+  }).isRequired,
+};
 
 export default Adapt;
