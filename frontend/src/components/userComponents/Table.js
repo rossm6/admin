@@ -17,4 +17,7 @@ function Table({ backgroundColor }) {
   );
 }
 
+Table.displayName = 'Table';
+Table.toJSON = () => Table.displayName;
+
 export default Table;

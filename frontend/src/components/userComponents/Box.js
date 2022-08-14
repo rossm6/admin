@@ -6,5 +6,6 @@ function Box(props) {
 }
 
 Box.displayName = 'Box';
+Box.toJSON = () => Box.displayName;
 
 export default Box;

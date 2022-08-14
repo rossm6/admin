@@ -41,6 +41,19 @@ const ENABLE_RESIZING = {
   topLeft: false,
 };
 
+function* traverseTree(tree) {
+  if (Array.isArray(tree)) {
+    for (let i = 0; i < tree.length; i++) {
+      yield* traverseTree(tree[i]);
+    }
+  } else if (Array.isArray(tree?.props?.children)) {
+    yield tree;
+    yield* traverseTree(tree.props.children);
+  } else {
+    yield tree;
+  }
+}
+
 function fromComponentTreeGetReactTreeComponentData(componentTree, path = []) {
   const parentLevel = path.length ? path[path.length - 1][0] : -1;
   const tree = [];
@@ -159,6 +172,13 @@ function Inspector() {
   if (element?.components) {
     componentTree = element.components;
   }
+
+  // for(let node of traverseTree(componentTree)){
+  //   console.log(node);
+  // }
+
+  // TODO - should we save the element state with the AdaptComponents?
+  // I can't think of any reason why not
 
   componentTree = [
     {
