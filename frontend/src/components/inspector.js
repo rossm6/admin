@@ -1,10 +1,24 @@
-import { Box, Flex } from 'theme-ui';
+import {
+  Box, Button, Flex, Label,
+} from 'theme-ui';
 import { Rnd } from 'react-rnd';
-import { useContext, useState } from 'react';
-import Tree, { TreeNode } from 'rc-tree';
+import {
+  useContext, useEffect, useMemo, useState,
+} from 'react';
+import Tree from 'rc-tree';
 import 'rc-tree/assets/index.css';
+import clone from 'lodash.clone';
+import isEqual from 'lodash.isequal';
+import { fromPromise } from '@apollo/client';
 import { AdaptContext } from './contexts';
 import Atom from './userComponents/Box';
+import FormAPI, {
+  Field, Form, FormContext, useForm,
+} from '../libs/form';
+import { FieldConsumer } from './form';
+import Table from './userComponents/Table';
+import { toJSON } from './jsonEditor';
+import AdaptComponent from './adaptComponent';
 
 const MIN_WIDTH = 100;
 
@@ -73,12 +87,66 @@ function fromComponentTreeGetReactTreeComponentData(componentTree, path = []) {
   return tree;
 }
 
-function AdaptComponent() {
-  return null;
+const COMPONENT_MAP = {
+  Box: {
+    Component: Atom,
+    props: ['sx'],
+  },
+  Table: {
+    Component: Table,
+    props: ['backgroundColor'],
+  },
+};
+
+function getDefaultFieldsForComponent(componentName) {
+  if (componentName === 'Box') {
+    return {
+      sx: {
+        type: 'jsonField',
+        label: 'Sx',
+        initialValue: [],
+        pipe: toJSON,
+      },
+    };
+  }
+  if (componentName === 'Table') {
+    return {
+      backgroundColor: {
+        type: 'text',
+        label: 'Background Color',
+        required: true,
+        initialValue: 'red',
+      },
+    };
+  }
+  return {};
+}
+
+function Fields({ fields }) {
+  const fieldNames = Object.keys(fields);
+
+  return fieldNames.map((fieldName) => (
+    <Field key={fieldName} name={fieldName}>
+      <FieldConsumer />
+    </Field>
+  ));
+}
+
+function getNewComponentConfig(formValues) {
+  const component = COMPONENT_MAP[formValues.submissionValues.component];
+  const config = {
+    Component: component.Component,
+    props: {},
+  };
+  for (const prop of component.props) {
+    const propValue = formValues.submissionValues[prop];
+    config.props[prop] = propValue;
+  }
+  return config;
 }
 
 function Inspector() {
-  const { elements, elementInView } = useContext(AdaptContext);
+  const { dispatch, elements, elementInView } = useContext(AdaptContext);
   const [devtoolsState, setDevtoolsState] = useState(LEFT_PANE);
   const [selectedComponent, setSelectedComponent] = useState();
 
@@ -159,14 +227,66 @@ function Inspector() {
 
   const tree = fromComponentTreeGetReactTreeComponentData(componentTree);
 
-  console.log(selectedComponent);
+  /**
+   * TODO - we need a way of mapping the widget output to a value prepared for submission
+   * (if there isn't already)
+   */
+
+  const initialComponent = 'Box';
+  const formApi = useForm({
+    fields: {
+      component: {
+        type: 'select',
+        label: 'Component',
+        initialValue: {
+          label: initialComponent,
+          value: initialComponent,
+        },
+        required: true,
+        choices: [
+          {
+            label: 'Box',
+            value: 'Box',
+          },
+          {
+            label: 'Table',
+            value: 'Table',
+          },
+        ],
+      },
+      ...getDefaultFieldsForComponent(initialComponent),
+    },
+    onSubmit: (values) => {
+      dispatch({
+        type: 'addComponentToElement',
+        payload: {
+          elementInView,
+          newComponent: getNewComponentConfig(values),
+        },
+      });
+    },
+  });
+
+  useEffect(() => {
+    const component = clone(formApi.state.fields.component);
+    component.initialValue = { ...formApi.state.values.component };
+
+    const fields = {
+      component,
+      ...getDefaultFieldsForComponent(component.initialValue.value),
+    };
+
+    if (!isEqual(formApi.state.fields, fields)) {
+      formApi.resetForm({ fields });
+    }
+  }, [formApi]);
 
   return (
     <Flex sx={{ flex: 1 }}>
       <Rnd
         bounds="parent"
         enableResizing={ENABLE_RESIZING}
-        disableDragging={false}
+        disableDragging
         size={{ width: devtoolsState.width, height: devtoolsState.height }}
         position={{ x: devtoolsState.x, y: devtoolsState.y }}
         onDragStop={(e, d) => {
@@ -185,14 +305,24 @@ function Inspector() {
         minWidth={devtoolsState.minWidth}
         minHeight={devtoolsState.minHeight}
       >
-        <Tree
-          onSelect={(key, obj) => {
-            setSelectedComponent(obj.node.adapt);
-          }}
-          showLine
-          showIcon={false}
-          treeData={tree}
-        />
+        <Box sx={{ height: '100%', pr: 2 }}>
+          <Tree
+            onSelect={(key, obj) => {
+              setSelectedComponent(obj.node.adapt);
+            }}
+            showLine
+            showIcon={false}
+            treeData={tree}
+          />
+          <Box sx={{ mt: 5 }}>
+            <FormContext.Provider value={formApi}>
+              <Form>
+                <Fields fields={formApi.state.fields} />
+                <Button variant="primary">Add</Button>
+              </Form>
+            </FormContext.Provider>
+          </Box>
+        </Box>
       </Rnd>
       <Box
         sx={{

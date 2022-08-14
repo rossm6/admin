@@ -8,93 +8,14 @@ import * as yup from 'yup';
 import PropTypes from 'prop-types';
 import { AdaptContext } from './contexts';
 import Plus from '../icons/plus.svg';
-import FormAPI, { Field, FieldContext, Form } from './form';
+import FormAPI, { Field, FieldContext, Form } from '../libs/form';
+import { FieldConsumer } from './form';
 
 function createElement(name) {
   return {
     name,
     components: [],
   };
-}
-
-/**
- * I cannot get the theme-ui checkbox to work
- * because the the input field, on which the onChange
- * handler is applied, is covered by the svg.
- */
-
-function CheckboxWrapper({
-  id, name, value, onChange, checked,
-}) {
-  return (
-    <input
-      id={id}
-      name={name}
-      value={value?.value}
-      checked={checked}
-      type="checkbox"
-      onChange={onChange}
-    />
-  );
-}
-
-CheckboxWrapper.propTypes = {
-  id: PropTypes.string,
-  name: PropTypes.string.isRequired,
-  value: PropTypes.oneOfType([
-    PropTypes.string,
-    PropTypes.shape({
-      label: PropTypes.string,
-      value: PropTypes.string,
-    }),
-  ]).isRequired,
-  onChange: PropTypes.func.isRequired,
-  checked: PropTypes.bool.isRequired,
-};
-
-CheckboxWrapper.defaultProps = {
-  id: undefined,
-};
-
-function FieldConsumer() {
-  const {
-    label: { htmlFor, label },
-    inputField: {
-      props: {
-        name, value, id, onChange, type, isChecked,
-      },
-    },
-    errors,
-  } = useContext(FieldContext);
-
-  let InputComponent = Input;
-  if (type === 'checkbox') {
-    InputComponent = CheckboxWrapper;
-  }
-
-  return (
-    <Box>
-      <Label htmlFor={htmlFor}>{label}</Label>
-      <InputComponent
-        id={id}
-        name={name}
-        value={value}
-        variant="bootstrap"
-        onChange={onChange}
-        sx={{ my: 2 }}
-        checked={isChecked(value)}
-      />
-      {!!errors?.length && (
-        <Box>
-          {errors.map((error) => (
-            <Box key={error} sx={{ color: 'red' }}>
-              {error}
-            </Box>
-          ))}
-        </Box>
-      )}
-    </Box>
-  );
 }
 
 function Elements() {

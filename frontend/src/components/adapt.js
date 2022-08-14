@@ -9,6 +9,7 @@ import Devtools from './devtools';
 import Ui from './ui';
 import { AdaptContext } from './contexts';
 import usePrevious from '../hooks/usePrevious';
+import AdaptComponent from './adaptComponent';
 
 function useMainContainerStyles(devtoolsPosition) {
   const containerSx = { display: 'flex', height: '100vh' };
@@ -43,8 +44,39 @@ function useMainContainerStyles(devtoolsPosition) {
   return [containerSx, containerCss, uiSx];
 }
 
+function addComponentToElement(elements, elementInView, newComponent) {
+  const currentElements = elements;
+  let element = currentElements[elementInView];
+  element = {
+    ...element,
+    components: [
+      ...element.components,
+      {
+        Component: AdaptComponent,
+        props: {
+          children: [],
+          userSelected: {
+            ...newComponent,
+          },
+        },
+      },
+    ],
+  };
+  currentElements[elementInView] = element;
+  return currentElements;
+}
+
 function adaptReducer(state, action) {
   switch (action.type) {
+    case 'addComponentToElement':
+      return {
+        ...state,
+        elements: addComponentToElement(
+          state.elements,
+          action.payload.elementInView,
+          action.payload.newComponent,
+        ),
+      };
     case 'setDevtoolsPosition':
       return {
         ...state,
@@ -73,11 +105,19 @@ const SAVE_STATE = gql`
   }
 `;
 
+function prepareStateForSaving(state) {
+  /**
+   * TODO -
+   * This removes functions of course.
+   * So we must swap functions out for displayName
+   */
+  return JSON.stringify(state);
+}
+
 function Adapt({ initialState }) {
   const [state, dispatch] = useReducer(adaptReducer, initialState);
   const [sx, css, uiSx] = useMainContainerStyles(state.devtoolsPosition);
   const [saveState] = useMutation(SAVE_STATE);
-
   const previousState = usePrevious(state);
 
   useEffect(() => {
@@ -85,7 +125,7 @@ function Adapt({ initialState }) {
       // i.e. do not save the initialState when Adapt first mounts!
       saveState({
         variables: {
-          state: JSON.stringify(state),
+          state: prepareStateForSaving(state),
         },
       });
     }

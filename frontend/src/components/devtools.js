@@ -78,12 +78,16 @@ function PositionMenu({
   );
 
   useEffect(() => {
-    const hideDropdown = () => setShowDevtoolsPositionDropdown(false);
+    const hideDropdown = () => {
+      if (showDevtoolsPositionDropdown) {
+        setShowDevtoolsPositionDropdown(false);
+      }
+    };
     window.addEventListener('click', hideDropdown);
     return () => {
       window.removeEventListener('click', hideDropdown);
     };
-  }, [setShowDevtoolsPositionDropdown]);
+  }, [showDevtoolsPositionDropdown, setShowDevtoolsPositionDropdown]);
 
   return (
     <DropdownMenu>
