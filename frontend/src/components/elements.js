@@ -180,12 +180,21 @@ function Elements() {
       {elements.map((element, index) => (
         <Box
           key={element.name}
+          onClick={() => {
+            dispatch({
+              type: 'elementInView',
+              payload: {
+                elementInView: index,
+              },
+            });
+          }}
           sx={{
             borderBottomStyle: 'solid',
             borderBottomWidth: 1,
             borderTopStyle: 'solid',
             borderColor: 'haze',
             borderTopWidth: index === 0 ? 1 : 0,
+            cursor: 'pointer',
             p: 2,
           }}
         >

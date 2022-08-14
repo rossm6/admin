@@ -11,6 +11,7 @@ import { AdaptContext } from './contexts';
 import propTypes from '../propTypes';
 import CSS from '../css';
 import Elements from './elements';
+import Inspector from './inspector';
 
 const MIN_WIDTH = 500;
 const MIN_HEIGHT = 100;
@@ -237,15 +238,6 @@ Tabs.propTypes = {
 
 const tabs = ['Inspector', 'Routes', 'Elements', 'Components'];
 
-function Inspector() {
-  return (
-    <Box>
-      <Box>rnd box here</Box>
-      <Box>side panel</Box>
-    </Box>
-  );
-}
-
 function initDevToolsState(devtoolsPosition) {
   if (devtoolsPosition === 'left') {
     return LEFT_PANE;
@@ -311,7 +303,7 @@ function Devtools() {
             showDevtoolsPositionDropdown={showDevtoolsPositionDropdown}
           />
         </Flex>
-        <Box sx={{ flex: 1, py: 2 }}>
+        <Box sx={{ display: 'flex', flex: 1, py: 2 }}>
           {tab === 'Inspector' && <Inspector />}
           {tab === 'Elements' && <Elements />}
         </Box>

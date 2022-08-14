@@ -6,6 +6,7 @@ import {
 import isObject from 'lodash.isobject';
 import clone from 'lodash.clone';
 import { isString } from 'lodash';
+import get from 'lodash.get';
 import propTypes from '../propTypes';
 import { AdaptContext } from './contexts';
 import RecursiveComponentTree from './componentTree';
@@ -15,7 +16,7 @@ import PencilFill from '../icons/pencilFill.svg';
 
 function ComponentTree(element) {
   if (!element?.components?.length) {
-    return <Box>This element contains no elements</Box>;
+    return <Box>This element contains no components</Box>;
   }
 
   return <RecursiveComponentTree tree={element.components} />;
@@ -92,13 +93,47 @@ function* traverseTree(tree) {
   }
 }
 
+function JsonEditorField({
+  editable,
+  onChange,
+  path,
+  elementToFocusOn,
+  value,
+  edit,
+  pathToProp,
+  editKey,
+  valueKey,
+  parentCollapsableNodeIsExpanded,
+}) {
+  let onClick = null;
+  if (parentCollapsableNodeIsExpanded) {
+    onClick = (e) => {
+      e.stopPropagation();
+      edit(path, pathToProp, editKey);
+    };
+  }
+
+  return editable ? (
+    <textarea
+      onChange={(e) => onChange(path, e.target.value, pathToProp, valueKey)}
+      ref={elementToFocusOn}
+      value={value}
+      style={{
+        display: editable ? 'block' : 'none',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    />
+  ) : (
+    <div onClick={onClick}>{value}</div>
+  );
+}
+
 function CollaspableNode({
   expandNode,
   path,
   tree,
   wholeTree,
   onChange,
-  onLosingFocus,
   edit,
   parentCollapsableNodeIsExpanded,
   addPropToValue,
@@ -114,9 +149,19 @@ function CollaspableNode({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: tree.expand ? 'column' : 'row' }}>
-      <Box sx={{ whiteSpace: 'pre-wrap' }}>
+      <Box sx={{ display: 'flex', whiteSpace: 'pre-wrap' }}>
         {showButton && <CollapseButton expandNode={expandNode} tree={tree} path={path} />}
-        {tree.key}
+        <JsonEditorField
+          editable={tree.edit}
+          onChange={onChange}
+          path={path}
+          elementToFocusOn={elementToFocusOn}
+          value={tree.key}
+          edit={edit}
+          editKey="edit"
+          valueKey="key"
+          parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded}
+        />
         :
         {'   '}
       </Box>
@@ -133,7 +178,6 @@ function CollaspableNode({
           tree={tree.value}
           wholeTree={wholeTree}
           onChange={onChange}
-          onLosingFocus={onLosingFocus}
           edit={edit}
           parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded && !!tree.expand}
           addPropToValue={addPropToValue}
@@ -150,7 +194,6 @@ function JSONEditorComponent({
   tree,
   wholeTree,
   onChange,
-  onLosingFocus,
   edit,
   parentCollapsableNodeIsExpanded = true,
   addPropToValue,
@@ -169,7 +212,6 @@ function JSONEditorComponent({
             tree={node}
             wholeTree={wholeTree}
             onChange={onChange}
-            onLosingFocus={onLosingFocus}
             edit={edit}
             parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded}
             addPropToValue={addPropToValue}
@@ -196,7 +238,6 @@ function JSONEditorComponent({
         tree={tree}
         wholeTree={wholeTree}
         onChange={onChange}
-        onLosingFocus={onLosingFocus}
         edit={edit}
         parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded}
         addPropToValue={addPropToValue}
@@ -208,53 +249,73 @@ function JSONEditorComponent({
   if (!tree?.cssValue) {
     return (
       <Box sx={{ display: 'flex' }}>
-        {tree.editKey ? (
-          <textarea
-            onChange={(e) => {
-              onChange(path, e.target.value);
-            }}
-            onBlur={() => onLosingFocus(path, 'key')}
+        <Box sx={{ display: 'flex', whiteSpace: 'pre-wrap' }}>
+          <JsonEditorField
+            editable={tree?.edit}
             value={tree.key}
+            onChange={onChange}
+            path={path}
+            edit={edit}
+            elementToFocusOn={elementToFocusOn}
+            editKey="edit"
+            valueKey="key"
+            parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded}
           />
-        ) : (
-          <Box sx={{ whiteSpace: 'pre-wrap' }}>
-            {tree.key}
-            :
-            {'   '}
-          </Box>
-        )}
-        {tree.editValue ? (
-          <textarea
-            onChange={(e) => {
-              onChange(path, e.target.value);
-            }}
-            onBlur={() => onLosingFocus(path, 'value')}
-            value={tree.value}
-          />
-        ) : (
-          <Box>{tree.value.value}</Box>
-        )}
+          :
+          {'   '}
+        </Box>
+        <JsonEditorField
+          editable={tree.value.edit}
+          value={tree.value.value}
+          onChange={onChange}
+          edit={edit}
+          elementToFocusOn={elementToFocusOn}
+          path={path}
+          pathToProp="value"
+          editKey="edit"
+          valueKey="value"
+          parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded}
+        />
         {parentCollapsableNodeIsExpanded && (
-          <IconButton>
-            <PlusCircleFill onClick={() => addPropToValue(path)} />
+          <IconButton
+            onClick={() => addPropToValue(path)}
+            sx={{ color: 'blue', cursor: 'pointer' }}
+          >
+            <PlusCircleFill />
           </IconButton>
         )}
       </Box>
     );
   }
 
-  return tree?.edit ? (
-    <textarea
-      onChange={(e) => onChange(path, e.target.value)}
-      ref={elementToFocusOn}
+  return (
+    <JsonEditorField
+      editable={tree?.edit}
+      onChange={onChange}
+      path={path}
       value={tree?.value}
-      style={{
-        display: tree?.edit ? 'block' : 'none',
-      }}
+      edit={edit}
+      elementToFocusOn={elementToFocusOn}
+      editKey="edit"
+      valueKey="value"
+      parentCollapsableNodeIsExpanded={parentCollapsableNodeIsExpanded}
     />
-  ) : (
-    <div onClick={() => edit(path)}>{tree?.value}</div>
   );
+}
+
+function removeAllInputs(tree) {
+  const copy = clone(tree);
+  for (const childNode of traverseTree(copy)) {
+    if (childNode.edit) {
+      childNode.edit = false;
+    }
+    if (isObject(childNode.value)) {
+      if (childNode.value.edit) {
+        childNode.value.edit = false;
+      }
+    }
+  }
+  return copy;
 }
 
 function JSONEditor({ tree }) {
@@ -263,10 +324,22 @@ function JSONEditor({ tree }) {
 
   useEffect(() => {
     if (elementToFocusOn.current) {
-      console.log(elementToFocusOn);
       elementToFocusOn.current.focus();
     }
   });
+
+  useEffect(() => {
+    const setAllFieldsToUneditable = () => {
+      const editedTree = removeAllInputs(treeData);
+      setTreeData(editedTree);
+    };
+
+    window.addEventListener('click', setAllFieldsToUneditable);
+
+    return () => {
+      window.removeEventListener('click', setAllFieldsToUneditable);
+    };
+  }, [setTreeData, treeData]);
 
   const expandNode = useCallback(
     (path, expand) => {
@@ -285,21 +358,27 @@ function JSONEditor({ tree }) {
   );
 
   const onChange = useCallback(
-    (path, value, keyToChange = 'value') => {
+    (path, value, pathToProp, key = 'value') => {
       const copy = clone(treeData);
-      const node = getNodeAtPath(copy, path);
-      node[keyToChange] = value;
+      let node = getNodeAtPath(copy, path);
+      if (pathToProp) {
+        node = get(node, pathToProp);
+      }
+      node[key] = value;
       setTreeData(copy);
     },
     [treeData, setTreeData],
   );
 
   const edit = useCallback(
-    (path) => {
-      const copy = clone(treeData);
-      const node = getNodeAtPath(copy, path);
-      node.edit = true;
-      setTreeData(copy);
+    (path, pathToProp, key = 'edit') => {
+      const editedTree = removeAllInputs(treeData);
+      let node = getNodeAtPath(editedTree, path);
+      if (pathToProp) {
+        node = get(node, pathToProp);
+      }
+      node[key] = true;
+      setTreeData(editedTree);
     },
     [treeData, setTreeData],
   );
@@ -351,7 +430,6 @@ function JSONEditor({ tree }) {
       edit={edit}
       expandNode={expandNode}
       onChange={onChange}
-      onLosingFocus={onLosingFocus}
       tree={treeData}
       wholeTree={treeData}
       addPropToValue={addPropToValue}
@@ -443,7 +521,11 @@ function Ui({ sx }) {
 
   return (
     <Box sx={{ flex: 1, ...sx }}>
-      <ComponentTree tree={elements[elementInView]} />
+      {elementInView >= 0 ? (
+        <ComponentTree tree={elements[elementInView]} />
+      ) : (
+        <Box>No element selected to inspect</Box>
+      )}
       <Box>
         <JSONEditor tree={tree} />
       </Box>
