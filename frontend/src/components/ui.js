@@ -57,6 +57,11 @@ function getComponentTreeRefs(componentTree) {
   return refs;
 }
 
+function insertComponents(tree) {
+  // traverse tree
+  // swap component names for actual components using a globally defined map
+}
+
 function Ui({ sx }) {
   const { elements, elementInView } = useContext(AdaptContext);
   const componentRefs = useRef();
@@ -68,80 +73,80 @@ function Ui({ sx }) {
     return <Box sx={{ flex: 1, ...sx }}>No element selected to view</Box>;
   }
 
-  const tree = [
-    {
-      key: 'background',
-      value: [
-        {
-          cssValue: true,
-          value: 'red',
-          edit: false,
-        },
-        {
-          cssValue: true,
-          value: 'pink',
-          edit: false,
-        },
-        {
-          cssValue: true,
-          value: 'yellow',
-          edit: false,
-        },
-        {
-          cssValue: true,
-          value: 'green',
-          edit: false,
-        },
-      ],
-    },
-    {
-      key: 'color',
-      value: {
-        cssValue: true,
-        value: 'yellow',
-        edit: false,
-      },
-    },
-    {
-      key: 'h1',
-      value: [
-        {
-          key: 'backgroundColor',
-          value: {
-            cssValue: true,
-            value: 'yellow',
-            edit: false,
-          },
-        },
-        {
-          key: 'a, span',
-          value: [
-            {
-              key: 'backgroundColor',
-              value: {
-                cssValue: true,
-                value: 'red',
-                edit: false,
-              },
-            },
-            {
-              key: 'color',
-              value: {
-                cssValue: true,
-                value: 'pink',
-                edit: false,
-              },
-            },
-          ],
-        },
-      ],
-    },
-  ];
+  // const tree = [
+  //   {
+  //     key: 'background',
+  //     value: [
+  //       {
+  //         cssValue: true,
+  //         value: 'red',
+  //         edit: false,
+  //       },
+  //       {
+  //         cssValue: true,
+  //         value: 'pink',
+  //         edit: false,
+  //       },
+  //       {
+  //         cssValue: true,
+  //         value: 'yellow',
+  //         edit: false,
+  //       },
+  //       {
+  //         cssValue: true,
+  //         value: 'green',
+  //         edit: false,
+  //       },
+  //     ],
+  //   },
+  //   {
+  //     key: 'color',
+  //     value: {
+  //       cssValue: true,
+  //       value: 'yellow',
+  //       edit: false,
+  //     },
+  //   },
+  //   {
+  //     key: 'h1',
+  //     value: [
+  //       {
+  //         key: 'backgroundColor',
+  //         value: {
+  //           cssValue: true,
+  //           value: 'yellow',
+  //           edit: false,
+  //         },
+  //       },
+  //       {
+  //         key: 'a, span',
+  //         value: [
+  //           {
+  //             key: 'backgroundColor',
+  //             value: {
+  //               cssValue: true,
+  //               value: 'red',
+  //               edit: false,
+  //             },
+  //           },
+  //           {
+  //             key: 'color',
+  //             value: {
+  //               cssValue: true,
+  //               value: 'pink',
+  //               edit: false,
+  //             },
+  //           },
+  //         ],
+  //       },
+  //     ],
+  //   },
+  // ];
 
   return (
     <Box sx={{ flex: 1, ...sx }}>
       {elementInView >= 0 ? (
-        <ComponentTree tree={elements[elementInView]} />
+        <ComponentTree tree={insertComponents(elements[elementInView])} />
       ) : (
         <Box>No element selected to inspect</Box>
       )}

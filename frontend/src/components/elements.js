@@ -51,7 +51,7 @@ function Elements() {
 
   const onSubmit = useCallback(
     ({ submissionValues }) => {
-      const { length } = elements.length;
+      const { length } = elements;
       setElements([
         ...elements,
         {

@@ -173,78 +173,6 @@ function Inspector() {
     componentTree = element.components;
   }
 
-  // for(let node of traverseTree(componentTree)){
-  //   console.log(node);
-  // }
-
-  // TODO - should we save the element state with the AdaptComponents?
-  // I can't think of any reason why not
-
-  componentTree = [
-    {
-      Component: AdaptComponent,
-      props: {
-        children: [
-          {
-            Component: AdaptComponent,
-            props: {
-              children: [
-                {
-                  Component: AdaptComponent,
-                  props: {
-                    children: [],
-                    userSelected: {
-                      Component: Atom,
-                      props: {
-                        color: 'blue',
-                      },
-                    },
-                  },
-                },
-                {
-                  Component: AdaptComponent,
-                  props: {
-                    children: [],
-                    userSelected: {
-                      Component: Atom,
-                      props: {
-                        color: 'blue',
-                      },
-                    },
-                  },
-                },
-              ],
-              userSelected: {
-                Component: Atom,
-                props: {
-                  color: 'blue',
-                },
-              },
-            },
-          },
-          {
-            Component: AdaptComponent,
-            props: {
-              children: [],
-              userSelected: {
-                Component: Atom,
-                props: {
-                  color: 'blue',
-                },
-              },
-            },
-          },
-        ],
-        userSelected: {
-          Component: Atom,
-          props: {
-            color: 'blue',
-          },
-        },
-      },
-    },
-  ];
-
   const tree = fromComponentTreeGetReactTreeComponentData(componentTree);
 
   /**
@@ -326,22 +254,28 @@ function Inspector() {
         minHeight={devtoolsState.minHeight}
       >
         <Box sx={{ height: '100%', pr: 2 }}>
-          <Tree
-            onSelect={(key, obj) => {
-              setSelectedComponent(obj.node.adapt);
-            }}
-            showLine
-            showIcon={false}
-            treeData={tree}
-          />
-          <Box sx={{ mt: 5 }}>
-            <FormContext.Provider value={formApi}>
-              <Form>
-                <Fields fields={formApi.state.fields} />
-                <Button variant="primary">Add</Button>
-              </Form>
-            </FormContext.Provider>
-          </Box>
+          {element ? (
+            <>
+              <Tree
+                onSelect={(key, obj) => {
+                  setSelectedComponent(obj.node.adapt);
+                }}
+                showLine
+                showIcon={false}
+                treeData={tree}
+              />
+              <Box sx={{ mt: 5 }}>
+                <FormContext.Provider value={formApi}>
+                  <Form>
+                    <Fields fields={formApi.state.fields} />
+                    <Button variant="primary">Add</Button>
+                  </Form>
+                </FormContext.Provider>
+              </Box>
+            </>
+          ) : (
+            <Box>No element selected to inspect</Box>
+          )}
         </Box>
       </Rnd>
       <Box
