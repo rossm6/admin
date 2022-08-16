@@ -10,13 +10,15 @@ import get from 'lodash.get';
 import propTypes from '../propTypes';
 import { AdaptContext } from './contexts';
 import RecursiveComponentTree from './componentTree';
+import insertComponents from '../utils/insertComponents';
+import TextareaResizeableAuto from './resizableTextarea';
 
-function ComponentTree(element) {
-  if (!element?.components?.length) {
+function ComponentTree(components) {
+  if (!components?.length) {
     return <Box>This element contains no components</Box>;
   }
 
-  return <RecursiveComponentTree tree={element.components} />;
+  return <RecursiveComponentTree tree={components} />;
 }
 
 function getAllPaths(tree, paths = [], path = []) {
@@ -57,17 +59,15 @@ function getComponentTreeRefs(componentTree) {
   return refs;
 }
 
-function insertComponents(tree) {
-  // traverse tree
-  // swap component names for actual components using a globally defined map
-}
-
 function Ui({ sx }) {
   const { elements, elementInView } = useContext(AdaptContext);
   const componentRefs = useRef();
   componentRefs.current = getComponentTreeRefs(
     elementInView === null ? [] : elements[elementInView],
   );
+
+  const [value, setValue] = useState('');
+  const onChange = (txt) => setValue(txt);
 
   if (elementInView === null) {
     return <Box sx={{ flex: 1, ...sx }}>No element selected to view</Box>;
@@ -143,10 +143,14 @@ function Ui({ sx }) {
   //   },
   // ];
 
+  const element = elements[elementInView];
+  const { components } = element;
+
   return (
     <Box sx={{ flex: 1, ...sx }}>
+      <TextareaResizeableAuto onChange={onChange} value={value} />
       {elementInView >= 0 ? (
-        <ComponentTree tree={insertComponents(elements[elementInView])} />
+        <ComponentTree tree={insertComponents(components)} />
       ) : (
         <Box>No element selected to inspect</Box>
       )}

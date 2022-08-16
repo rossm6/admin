@@ -9,16 +9,14 @@ import Tree from 'rc-tree';
 import 'rc-tree/assets/index.css';
 import clone from 'lodash.clone';
 import isEqual from 'lodash.isequal';
-import { fromPromise } from '@apollo/client';
 import { AdaptContext } from './contexts';
-import Atom from './userComponents/Box';
 import FormAPI, {
   Field, Form, FormContext, useForm,
 } from '../libs/form';
 import { FieldConsumer } from './form';
-import Table from './userComponents/Table';
 import { toJSON } from './jsonEditor';
-import AdaptComponent from './adaptComponent';
+import { COMPONENT_MAP } from './userComponents';
+import insertComponents from '../utils/insertComponents';
 
 const MIN_WIDTH = 100;
 
@@ -40,19 +38,6 @@ const ENABLE_RESIZING = {
   bottomLeft: false,
   topLeft: false,
 };
-
-function* traverseTree(tree) {
-  if (Array.isArray(tree)) {
-    for (let i = 0; i < tree.length; i++) {
-      yield* traverseTree(tree[i]);
-    }
-  } else if (Array.isArray(tree?.props?.children)) {
-    yield tree;
-    yield* traverseTree(tree.props.children);
-  } else {
-    yield tree;
-  }
-}
 
 function fromComponentTreeGetReactTreeComponentData(componentTree, path = []) {
   const parentLevel = path.length ? path[path.length - 1][0] : -1;
@@ -99,17 +84,6 @@ function fromComponentTreeGetReactTreeComponentData(componentTree, path = []) {
 
   return tree;
 }
-
-const COMPONENT_MAP = {
-  Box: {
-    Component: Atom,
-    props: ['sx'],
-  },
-  Table: {
-    Component: Table,
-    props: ['backgroundColor'],
-  },
-};
 
 function getDefaultFieldsForComponent(componentName) {
   if (componentName === 'Box') {
@@ -173,7 +147,7 @@ function Inspector() {
     componentTree = element.components;
   }
 
-  const tree = fromComponentTreeGetReactTreeComponentData(componentTree);
+  const tree = fromComponentTreeGetReactTreeComponentData(insertComponents(componentTree));
 
   /**
    * TODO - we need a way of mapping the widget output to a value prepared for submission
