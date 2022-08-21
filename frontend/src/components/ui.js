@@ -67,7 +67,6 @@ function Ui({ sx }) {
   );
 
   const [value, setValue] = useState('');
-  const onChange = (txt) => setValue(txt);
 
   if (elementInView === null) {
     return <Box sx={{ flex: 1, ...sx }}>No element selected to view</Box>;
@@ -148,7 +147,7 @@ function Ui({ sx }) {
 
   return (
     <Box sx={{ flex: 1, ...sx }}>
-      <TextareaResizeableAuto onChange={onChange} value={value} />
+      <TextareaResizeableAuto onFinishing={(newValue) => setValue(newValue)} value={value} />
       {elementInView >= 0 ? (
         <ComponentTree tree={insertComponents(components)} />
       ) : (

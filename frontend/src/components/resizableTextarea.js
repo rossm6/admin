@@ -5,6 +5,7 @@ import clone from 'lodash.clone';
 import isNumber from 'lodash.isnumber';
 import '../css/resizableTextarea.css';
 import classNames from 'classnames';
+import { isElement, isEqual } from 'lodash';
 import usePrevious from '../hooks/usePrevious';
 
 function charObjsToString(charObjs) {
@@ -39,18 +40,15 @@ function getNotBeginningInputClasses(atBeginning, movingCursor) {
 }
 
 function TextareaResizeableAuto({
-  onChange: outerOnChange,
   fontSize = 12,
   maxWidth = 200,
+  onFinishing,
   value: initialValue,
 }) {
   /**
    * TODO -
    *
-   * What about the first and last chars?
-   *
-   * Enable focus on the div - i.e. the white space outside any child spans -
-   * to put focus on the last char.
+   * Up and down arrow support for navigating across multiple rows.
    *
    * Enable highlighting the text for deleting or overwriting.  This will involve
    * mouse down and mouse over to track the range of spans which have been highlighted.
@@ -59,12 +57,23 @@ function TextareaResizeableAuto({
    */
 
   const [value, setValue] = useState(stringToCharObjs(initialValue));
-  const [inputValue, setInputValue] = useState('');
   const [atBeginning, setAtBeginning] = useState(!initialValue?.length);
+  const [focussed, setFocussed] = useState(false);
 
+  const previousValue = usePrevious(value);
   const valueAsStr = charObjsToString(value);
-
   const previousValueAsStr = usePrevious(valueAsStr);
+
+  useEffect(() => {
+    if (!isEqual(previousValue, value)) {
+      if (!focussed) {
+        // internal state is changing so the component
+        // should be considered focussed
+        setFocussed(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focussed, setFocussed, value]);
 
   useEffect(() => {
     if (!valueAsStr) {
@@ -75,10 +84,20 @@ function TextareaResizeableAuto({
       setAtBeginning(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atBeginning, setAtBeginning, valueAsStr]);
+  }, [atBeginning, focussed, setAtBeginning, setFocussed, valueAsStr]);
+
+  const previousFocussed = usePrevious(focussed);
+
+  useEffect(() => {
+    if (previousFocussed === true && focussed === false) {
+      onFinishing(valueAsStr);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focussed, valueAsStr, onFinishing]);
 
   const insertAtBeginning = useCallback(
     (e) => {
+      e.stopPropagation();
       const copy = clone(value);
       const id = getNextId(copy.map((v) => v.id));
       const newCharObj = stringToCharObjs(e.target.value, id);
@@ -91,7 +110,8 @@ function TextareaResizeableAuto({
   );
 
   const getCharacterClickHandler = useCallback(
-    (charObj) => () => {
+    (charObj) => (e) => {
+      e.stopPropagation();
       const copy = clone(value);
       for (let i = 0; i < copy.length; i++) {
         if (copy[i].id === charObj.id) {
@@ -101,8 +121,11 @@ function TextareaResizeableAuto({
         }
       }
       setValue(copy);
+      if (!focussed) {
+        setFocussed(true);
+      }
     },
-    [setValue, value],
+    [focussed, setFocussed, setValue, value],
   );
 
   const insertNewCharObjAfter = useCallback(
@@ -199,9 +222,10 @@ function TextareaResizeableAuto({
           break;
         }
       }
+      setFocussed(false);
       setValue(copy);
     },
-    [value, setValue],
+    [setFocussed, value, setValue],
   );
 
   const goBack = useCallback(
@@ -221,9 +245,17 @@ function TextareaResizeableAuto({
 
   const goForward = useCallback(
     (value, charObj) => {
+      // no charObj means we are going forward from the initial input
+      // so we move to the first char in the value if there is one
       const copy = clone(value);
       for (let i = 0; i < copy.length; i++) {
-        if (copy[i - 1]?.id === charObj.id) {
+        if (charObj) {
+          if (copy[i - 1]?.id === charObj.id) {
+            copy[i].edit = true;
+          } else {
+            copy[i].edit = false;
+          }
+        } else if (i === 0) {
           copy[i].edit = true;
         } else {
           copy[i].edit = false;
@@ -262,7 +294,7 @@ function TextareaResizeableAuto({
 
   const inputKeyDownHandler = useCallback(
     (charObj) => (e) => {
-      if (e.keyCode === 37) {
+      if (e.keyCode === 37 && charObj) {
         // left arrow key i.e. going backwards
         if (value[0]?.id !== charObj.id) {
           if (!movingCursor) {
@@ -274,7 +306,15 @@ function TextareaResizeableAuto({
         }
       } else if (e.keyCode === 39) {
         // right arrow key i.e. going forwards
-        if (value[value.length - 1]?.id !== charObj.id) {
+        if (!charObj) {
+          if (value.length) {
+            // we are currently at the initial input but do have other chars to move to
+            if (!movingCursor) {
+              setMovingCursor(true);
+            }
+            goForward(value);
+          }
+        } else if (value[value.length - 1]?.id !== charObj.id) {
           if (!movingCursor) {
             setMovingCursor(true);
           }
@@ -297,8 +337,28 @@ function TextareaResizeableAuto({
     };
   }, [movingCursor, setMovingCursor]);
 
+  const whiteSpaceClicked = useCallback(() => {
+    if (value.length) {
+      const copy = clone(value);
+      for (let i = 0; i < copy.length; i++) {
+        copy[i].edit = false;
+        if (i === copy.length - 1) {
+          copy[i].edit = true;
+        }
+      }
+      setAtBeginning(false);
+      setValue(copy);
+    } else {
+      setAtBeginning(true);
+    }
+    if (!focussed) {
+      setFocussed(true);
+    }
+  }, [focussed, setFocussed, value]);
+
   return (
     <div
+      onClick={whiteSpaceClicked}
       style={{
         background: 'white',
         border: '1px black dotted',
@@ -309,21 +369,41 @@ function TextareaResizeableAuto({
       }}
     >
       {atBeginning && (
-        <span className={classNames('borderLeft', 'borderBlink')}>
-          <input
-            name="textarea_initial"
-            onChange={insertAtBeginning}
-            value=""
-            style={{
-              backgroundColor: 'transparent',
-              fontSize,
-              border: 0,
-              outline: 0,
-              width: '5px',
-              caretColor: 'transparent',
-            }}
-            ref={editInputRef}
-          />
+        <span
+          className={classNames(focussed && 'borderLeft', focussed && 'borderBlink')}
+          style={{
+            position: 'relative',
+            width: '5px',
+            display: focussed ? 'inline' : 'inline-block',
+          }}
+        >
+          {focussed && (
+            <input
+              name="textarea_initial"
+              onChange={insertAtBeginning}
+              onKeyDown={inputKeyDownHandler()}
+              onBlur={() => {
+                setFocussed(false);
+                setAtBeginning(false);
+              }}
+              value=""
+              style={{
+                backgroundColor: 'transparent',
+                fontSize,
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                padding: 0,
+                border: 0,
+                outline: 0,
+                width: '5px',
+                caretColor: 'transparent',
+                fontWeight: 'normal',
+                color: 'transparent',
+              }}
+              ref={editInputRef}
+            />
+          )}
         </span>
       )}
       {value.map((charObj) => (
@@ -332,11 +412,12 @@ function TextareaResizeableAuto({
           onClick={getCharacterClickHandler(charObj)}
           style={{
             position: charObj.edit ? 'relative' : null,
+            whiteSpace: 'break-spaces',
           }}
         >
           {charObj.edit ? (
             <>
-              <span style={{ visibility: 'hidden' }}>{charObj.char}</span>
+              <span style={{ whiteSpace: 'break-spaces' }}>{charObj.char}</span>
               <span
                 className={classNames(...getNotBeginningInputClasses(atBeginning, movingCursor))}
               >
@@ -359,6 +440,7 @@ function TextareaResizeableAuto({
                     left: 0,
                     padding: 0,
                     caretColor: 'transparent',
+                    color: 'transparent',
                   }}
                   ref={editInputRef}
                 />
