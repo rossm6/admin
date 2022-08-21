@@ -147,7 +147,6 @@ function Ui({ sx }) {
 
   return (
     <Box sx={{ flex: 1, ...sx }}>
-      <TextareaResizeableAuto onFinishing={(newValue) => setValue(newValue)} value={value} />
       {elementInView >= 0 ? (
         <ComponentTree tree={insertComponents(components)} />
       ) : (

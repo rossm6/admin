@@ -40,9 +40,12 @@ function getNotBeginningInputClasses(atBeginning, movingCursor) {
 }
 
 function TextareaResizeableAuto({
+  autoFocus,
+  onBlur,
+  color,
   fontSize = 12,
   maxWidth = 200,
-  onFinishing,
+  onFocus,
   value: initialValue,
 }) {
   /**
@@ -56,24 +59,67 @@ function TextareaResizeableAuto({
    * A backspace means mass delete.
    */
 
+  const focus = !!autoFocus;
+
   const [value, setValue] = useState(stringToCharObjs(initialValue));
   const [atBeginning, setAtBeginning] = useState(!initialValue?.length);
-  const [focussed, setFocussed] = useState(false);
+  const [focused, setFocused] = useState(focus);
+  const [movingCursor, setMovingCursor] = useState(false);
+  const editInputRef = useRef();
 
   const previousValue = usePrevious(value);
   const valueAsStr = charObjsToString(value);
   const previousValueAsStr = usePrevious(valueAsStr);
 
+  const previousFocusProp = usePrevious(focus);
+  const previousFocused = usePrevious(focused);
+  const internalOnBlurFired = useRef(false);
+  const isEditable = value.find((val) => val.edit);
+
+  const focusedFromInside = useCallback(() => {
+    if (!focused) {
+      setFocused(true);
+    }
+    if (onFocus) {
+      onFocus();
+    }
+  }, [focused, setFocused, onFocus]);
+
   useEffect(() => {
-    if (!isEqual(previousValue, value)) {
-      if (!focussed) {
-        // internal state is changing so the component
-        // should be considered focussed
-        setFocussed(true);
+    /**
+     * We cannot just declare the React Component to be in a unfocused state
+     * because onBlur has been triggered, because onBlur is triggered when
+     * moving from one char to another.  So we none are in edit mode.
+     */
+    if (!isEditable) {
+      if (internalOnBlurFired.current) {
+        internalOnBlurFired.current = false;
+        if (focused) {
+          setFocused(false);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focussed, setFocussed, value]);
+  });
+
+  useEffect(() => {
+    if (previousFocusProp === focus && previousFocused === true && focused === false) {
+      // focus was lost on either of the two elements
+      if (onBlur) {
+        onBlur(valueAsStr);
+      }
+    } else if (
+      previousFocusProp !== undefined
+      && previousFocusProp !== focus
+      && focus !== focused
+    ) {
+      setFocused(focus);
+      // autoFocus prop has changed
+      // because this internal change has been caused from outside i.e. a prop changed
+      // we do not call onFocus
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused, valueAsStr, onBlur, previousFocused, previousFocusProp, focus]);
 
   useEffect(() => {
     if (!valueAsStr) {
@@ -84,16 +130,7 @@ function TextareaResizeableAuto({
       setAtBeginning(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atBeginning, focussed, setAtBeginning, setFocussed, valueAsStr]);
-
-  const previousFocussed = usePrevious(focussed);
-
-  useEffect(() => {
-    if (previousFocussed === true && focussed === false) {
-      onFinishing(valueAsStr);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focussed, valueAsStr, onFinishing]);
+  }, [atBeginning, focused, setAtBeginning, valueAsStr]);
 
   const insertAtBeginning = useCallback(
     (e) => {
@@ -120,12 +157,10 @@ function TextareaResizeableAuto({
           copy[i].edit = false;
         }
       }
+      focusedFromInside();
       setValue(copy);
-      if (!focussed) {
-        setFocussed(true);
-      }
     },
-    [focussed, setFocussed, setValue, value],
+    [focusedFromInside, setValue, value],
   );
 
   const insertNewCharObjAfter = useCallback(
@@ -183,7 +218,7 @@ function TextareaResizeableAuto({
         // char has been added
 
         // It seems that on firefox anyway the default cursor position is 0
-        // after we've focussed onto the element (although oddly only when we hit
+        // after we've focused onto the element (although oddly only when we hit
         // left arrow key and not the right arrow key)
 
         // Anyway, on change, we only ever have two chars, or nothing
@@ -204,10 +239,8 @@ function TextareaResizeableAuto({
     [backspace, insertNewCharObjAfter, value],
   );
 
-  const editInputRef = useRef();
-
   useEffect(() => {
-    if (editInputRef.current) {
+    if (editInputRef.current && focused) {
       const input = editInputRef.current;
       input.focus();
     }
@@ -222,10 +255,10 @@ function TextareaResizeableAuto({
           break;
         }
       }
-      setFocussed(false);
       setValue(copy);
+      internalOnBlurFired.current = true;
     },
-    [setFocussed, value, setValue],
+    [value, setValue],
   );
 
   const goBack = useCallback(
@@ -290,8 +323,6 @@ function TextareaResizeableAuto({
     [backToBeginning, goBack, value],
   );
 
-  const [movingCursor, setMovingCursor] = useState(false);
-
   const inputKeyDownHandler = useCallback(
     (charObj) => (e) => {
       if (e.keyCode === 37 && charObj) {
@@ -337,31 +368,33 @@ function TextareaResizeableAuto({
     };
   }, [movingCursor, setMovingCursor]);
 
-  const whiteSpaceClicked = useCallback(() => {
-    if (value.length) {
-      const copy = clone(value);
-      for (let i = 0; i < copy.length; i++) {
-        copy[i].edit = false;
-        if (i === copy.length - 1) {
-          copy[i].edit = true;
+  const whiteSpaceClicked = useCallback(
+    (e) => {
+      e.stopPropagation();
+      if (value.length) {
+        const copy = clone(value);
+        for (let i = 0; i < copy.length; i++) {
+          copy[i].edit = false;
+          if (i === copy.length - 1) {
+            copy[i].edit = true;
+          }
         }
+        setAtBeginning(false);
+        setValue(copy);
+      } else {
+        setAtBeginning(true);
       }
-      setAtBeginning(false);
-      setValue(copy);
-    } else {
-      setAtBeginning(true);
-    }
-    if (!focussed) {
-      setFocussed(true);
-    }
-  }, [focussed, setFocussed, value]);
+      focusedFromInside();
+    },
+    [focusedFromInside, value],
+  );
 
   return (
     <div
       onClick={whiteSpaceClicked}
       style={{
         background: 'white',
-        border: '1px black dotted',
+        border: focused && '1px black dotted',
         display: 'inline-block',
         fontSize,
         maxWidth,
@@ -370,20 +403,20 @@ function TextareaResizeableAuto({
     >
       {atBeginning && (
         <span
-          className={classNames(focussed && 'borderLeft', focussed && 'borderBlink')}
+          className={classNames(focused && 'borderLeft', focused && 'borderBlink')}
           style={{
             position: 'relative',
             width: '5px',
-            display: focussed ? 'inline' : 'inline-block',
+            display: focused ? 'inline' : 'inline-block',
           }}
         >
-          {focussed && (
+          {focused && (
             <input
               name="textarea_initial"
               onChange={insertAtBeginning}
               onKeyDown={inputKeyDownHandler()}
               onBlur={() => {
-                setFocussed(false);
+                internalOnBlurFired.current = true;
                 setAtBeginning(false);
               }}
               value=""
@@ -411,13 +444,14 @@ function TextareaResizeableAuto({
           key={charObj.id}
           onClick={getCharacterClickHandler(charObj)}
           style={{
+            color,
             position: charObj.edit ? 'relative' : null,
             whiteSpace: 'break-spaces',
           }}
         >
           {charObj.edit ? (
             <>
-              <span style={{ whiteSpace: 'break-spaces' }}>{charObj.char}</span>
+              <span style={{ color, whiteSpace: 'break-spaces' }}>{charObj.char}</span>
               <span
                 className={classNames(...getNotBeginningInputClasses(atBeginning, movingCursor))}
               >
