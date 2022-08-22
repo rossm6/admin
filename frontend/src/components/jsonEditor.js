@@ -365,8 +365,6 @@ function JSONEditor({ treeData, setTreeData }) {
     [treeData, setTreeData],
   );
 
-  console.log(JSON.stringify(treeData));
-
   return (
     <JSONEditorComponent
       edit={edit}

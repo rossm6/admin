@@ -15,7 +15,7 @@
     "@apollo/client": "^3.6.9",
     "@microlink/react-json-view": "^1.22.2",
     "classnames": "^2.3.1",
-    "graphql": "^16.5.0",
+    "graphql": "^16.6.0",
     "lodash.capitalize": "^4.2.1",
     "lodash.clone": "^4.5.0",
     "lodash.get": "^4.4.2",

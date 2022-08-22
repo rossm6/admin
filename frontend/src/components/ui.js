@@ -12,6 +12,7 @@ import { AdaptContext } from './contexts';
 import RecursiveComponentTree from './componentTree';
 import insertComponents from '../utils/insertComponents';
 import TextareaResizeableAuto from './resizableTextarea';
+import GraphqlExplorer from './graphqlExplorer';
 
 function ComponentTree(components) {
   if (!components?.length) {
@@ -147,6 +148,7 @@ function Ui({ sx }) {
 
   return (
     <Box sx={{ flex: 1, ...sx }}>
+      <GraphqlExplorer />
       {elementInView >= 0 ? (
         <ComponentTree tree={insertComponents(components)} />
       ) : (
